@@ -44,18 +44,8 @@ VoiceMessageRecorder(
 );
 ```
 
-Run the bundled demo:
-
-```bash
-cd example
-flutter run
-```
 
 ## Platform notes
 
 - Microphone permission is required for recording (`NSMicrophoneUsageDescription` on iOS, `RECORD_AUDIO` on Android).
 - Playback uses `just_audio` with local file paths.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
