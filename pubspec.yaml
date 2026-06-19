@@ -1,0 +1,22 @@
+name: flutter_voice_message_ui
+description: Voice message UI widgets with waveform visualization, playback, and recording for Flutter chat apps.
+version: 0.1.0
+homepage:
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  just_audio: ^0.10.4
+  record: ^6.0.0
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
