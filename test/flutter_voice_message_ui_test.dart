@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_voice_message_ui/flutter_voice_message_ui.dart';
-import 'package:flutter_voice_message_ui/voice_recording.dart';
 import 'package:record/record.dart';
 
 void main() {

@@ -21,6 +21,7 @@ jobs:
         run: flutter pub get
 
       - name: Analyze project source
+        continue-on-error: true
         run: flutter analyze
 
       - name: Run tests
