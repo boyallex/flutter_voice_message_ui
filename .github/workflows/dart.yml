@@ -13,11 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dart-lang/setup-dart@9a04e6d73cca37bd455e0608d7e5092f881fd603
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
 
       - name: Install dependencies
         run: flutter pub get
-
 
       - name: Analyze project source
         run: flutter analyze
@@ -26,5 +27,7 @@ jobs:
         run: flutter test
 
       - name: Build APK
-        run: flutter build apk
+        run: |
+          cd ./example
+          flutter build apk
 
