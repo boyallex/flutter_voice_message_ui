@@ -30,6 +30,7 @@ class VoiceRecordController extends ChangeNotifier {
   bool _isStarting = false;
   DateTime? _recordingStartedAt;
   Duration _pausedElapsed = Duration.zero;
+  bool _disposed = false;
 
   VoiceRecordState get state => _state;
   Duration get elapsed => _elapsed;
@@ -141,6 +142,11 @@ class VoiceRecordController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+
     _timer?.cancel();
     if (_state != VoiceRecordState.idle) {
       unawaited(_cancelActiveRecording());
