@@ -62,6 +62,8 @@ class _VoiceMessageDemoPageState extends State<VoiceMessageDemoPage> {
           id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
           audioPath: path,
           duration: duration,
+          // Demo placeholder: replace with real amplitude extraction in production
+          // (e.g. audio_waveforms, ffmpeg, or platform-specific APIs).
           waveform: _mockWaveform(seed: path.hashCode),
           isSent: true,
         ),
@@ -71,64 +73,71 @@ class _VoiceMessageDemoPageState extends State<VoiceMessageDemoPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Voice Message UI'),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: _messages.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final message = _messages[index];
-                  final hasAudio = message.audioPath.isNotEmpty;
-        
-                  if (!hasAudio) {
-                    return Opacity(
-                      opacity: 0.55,
-                      child: VoiceMessageBubble(
-                        messageId: message.id,
-                        audioPath: message.audioPath,
-                        duration: message.duration,
-                        waveform: message.waveform,
-                        isSent: message.isSent,
-                      ),
+    return VoiceMessageScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Voice Message UI'),
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _messages.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final message = _messages[index];
+                    final hasAudio = message.audioPath.isNotEmpty;
+
+                    if (!hasAudio) {
+                      return Opacity(
+                        opacity: 0.55,
+                        child: VoiceMessageBubble(
+                          messageId: message.id,
+                          audioPath: message.audioPath,
+                          duration: message.duration,
+                          waveform: message.waveform,
+                          isSent: message.isSent,
+                        ),
+                      );
+                    }
+
+                    return VoiceMessageBubble(
+                      messageId: message.id,
+                      audioPath: message.audioPath,
+                      duration: message.duration,
+                      waveform: message.waveform,
+                      isSent: message.isSent,
                     );
-                  }
-        
-                  return VoiceMessageBubble(
-                    messageId: message.id,
-                    audioPath: message.audioPath,
-                    duration: message.duration,
-                    waveform: message.waveform,
-                    isSent: message.isSent,
-                  );
-                },
+                  },
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  VoiceMessageRecorder(
-                    controller: _recordController,
-                    onRecordingComplete: _addRecordedMessage,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Record a message, then tap send to add it to the chat.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    VoiceMessageRecorder(
+                      controller: _recordController,
+                      onRecordingComplete: _addRecordedMessage,
+                      onError: (error, _) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(error.toString())),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Record a message, then tap send to add it to the chat.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -28,13 +28,22 @@ class WaveformPainter extends CustomPainter {
 
     final barSlot = barWidth + barSpacing;
     final visibleBars = (size.width / barSlot).floor().clamp(1, samples.length);
-    final normalizedSamples = samples.length == visibleBars
-        ? samples
-        : _pickSamples(visibleBars);
+    final normalizedSamples = visibleBars < samples.length
+        ? samples.sublist(0, visibleBars)
+        : samples;
 
     final progressIndex = (progress.clamp(0, 1) * normalizedSamples.length)
         .floor()
         .clamp(0, normalizedSamples.length);
+
+    final inactivePaint = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = barWidth;
+    final activePaint = Paint()
+      ..color = progressColor
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = barWidth;
 
     for (var i = 0; i < normalizedSamples.length; i++) {
       final x = i * barSlot;
@@ -42,11 +51,7 @@ class WaveformPainter extends CustomPainter {
       final barHeight =
           (amplitude * size.height).clamp(minBarHeight, size.height);
       final top = (size.height - barHeight) / 2;
-
-      final paint = Paint()
-        ..color = i < progressIndex ? progressColor : color
-        ..strokeCap = StrokeCap.round
-        ..strokeWidth = barWidth;
+      final paint = i < progressIndex ? activePaint : inactivePaint;
 
       canvas.drawLine(
         Offset(x + barWidth / 2, top),
@@ -54,23 +59,6 @@ class WaveformPainter extends CustomPainter {
         paint,
       );
     }
-  }
-
-  List<double> _pickSamples(int count) {
-    if (count <= 0) {
-      return const [];
-    }
-    if (samples.length <= count) {
-      return samples;
-    }
-
-    final step = samples.length / count;
-    final picked = <double>[];
-    for (var i = 0; i < count; i++) {
-      final index = (i * step).floor().clamp(0, samples.length - 1);
-      picked.add(samples[index]);
-    }
-    return picked;
   }
 
   @override

@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 
 import 'duration_format.dart';
 import 'voice_message_player.dart';
+import 'voice_message_scope.dart';
+import 'voice_playback_event.dart';
 import 'waveform_painter.dart';
 import 'waveform_utils.dart';
 
 /// Chat-style bubble for playing a recorded voice message with a waveform.
+@immutable
 class VoiceMessageBubble extends StatefulWidget {
   const VoiceMessageBubble({
     super.key,
@@ -13,6 +16,7 @@ class VoiceMessageBubble extends StatefulWidget {
     required this.audioPath,
     required this.duration,
     required this.waveform,
+    this.player,
     this.isSent = false,
     this.backgroundColor,
     this.foregroundColor,
@@ -20,12 +24,14 @@ class VoiceMessageBubble extends StatefulWidget {
     this.waveformBarCount = 32,
     this.onPlay,
     this.onStop,
+    this.onPlaybackEvent,
   });
 
   final String messageId;
   final String audioPath;
   final Duration duration;
   final List<double> waveform;
+  final VoiceMessagePlayer? player;
   final bool isSent;
   final Color? backgroundColor;
   final Color? foregroundColor;
@@ -33,51 +39,98 @@ class VoiceMessageBubble extends StatefulWidget {
   final int waveformBarCount;
   final VoidCallback? onPlay;
   final VoidCallback? onStop;
+  final void Function(VoicePlaybackEvent event)? onPlaybackEvent;
 
   @override
   State<VoiceMessageBubble> createState() => _VoiceMessageBubbleState();
 }
 
 class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
-  final VoiceMessagePlayer _player = VoiceMessagePlayer.instance;
+  VoiceMessagePlayer? _player;
+  List<double> _normalizedWaveform = const [];
 
   @override
   void initState() {
     super.initState();
-    _player.attach();
-    _player.addListener(_onPlayerChanged);
+    _cacheWaveform();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final resolvedPlayer = _resolvePlayer();
+    if (!identical(_player, resolvedPlayer)) {
+      _player?.removePlaybackEventListener(_handlePlaybackEvent);
+      _player?.detach();
+      _player = resolvedPlayer
+        ..attach()
+        ..addPlaybackEventListener(_handlePlaybackEvent);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant VoiceMessageBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.waveform != widget.waveform ||
+        oldWidget.waveformBarCount != widget.waveformBarCount) {
+      _cacheWaveform();
+    }
   }
 
   @override
   void dispose() {
-    _player.removeListener(_onPlayerChanged);
+    _player?.removePlaybackEventListener(_handlePlaybackEvent);
+    _player?.detach();
     super.dispose();
   }
 
-  void _onPlayerChanged() {
-    if (mounted) {
-      setState(() {});
+  VoiceMessagePlayer _resolvePlayer() {
+    return widget.player ??
+        VoiceMessageScope.maybeOf(context) ??
+        VoiceMessagePlayer.instance;
+  }
+
+  void _cacheWaveform() {
+    _normalizedWaveform = WaveformUtils.normalizeList(
+      WaveformUtils.reduceList(widget.waveform, widget.waveformBarCount),
+    );
+  }
+
+  void _handlePlaybackEvent(VoicePlaybackEvent event) {
+    if (event.messageId != widget.messageId) {
+      return;
+    }
+
+    widget.onPlaybackEvent?.call(event);
+    switch (event) {
+      case VoicePlaybackStarted():
+        widget.onPlay?.call();
+      case VoicePlaybackPaused():
+      case VoicePlaybackStopped():
+      case VoicePlaybackCompleted():
+        widget.onStop?.call();
     }
   }
 
   Future<void> _onTogglePressed() async {
-    final isActive = _player.isActive(widget.messageId);
-    final wasPlaying = isActive && _player.isPlaying;
+    final player = _player;
+    if (player == null) {
+      return;
+    }
 
-    await _player.toggle(
-      messageId: widget.messageId,
-      source: widget.audioPath,
-    );
-
-    if (wasPlaying) {
-      widget.onStop?.call();
-    } else {
-      widget.onPlay?.call();
+    try {
+      await player.toggle(
+        messageId: widget.messageId,
+        source: widget.audioPath,
+      );
+    } on Object catch (error) {
+      debugPrint('VoiceMessageBubble playback failed: $error');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final player = _player ?? _resolvePlayer();
     final theme = Theme.of(context);
     final background = widget.backgroundColor ??
         (widget.isSent
@@ -89,22 +142,86 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
             : theme.colorScheme.onSurfaceVariant);
     final progress = widget.progressColor ?? theme.colorScheme.primary;
 
-    final isActive = _player.isActive(widget.messageId);
-    final isPlaying = isActive && _player.isPlaying;
-    final progressValue = isActive ? _player.progressFor(widget.messageId) : 0.0;
-    final labelDuration =
-        isActive && _player.duration > Duration.zero ? _player.duration : widget.duration;
-    final remainingMs = isActive && isPlaying
-        ? (labelDuration.inMilliseconds - _player.position.inMilliseconds)
-            .clamp(0, labelDuration.inMilliseconds)
-        : widget.duration.inMilliseconds;
-    final remaining = Duration(milliseconds: remainingMs);
-    final waveform = WaveformUtils.normalizeList(
-      WaveformUtils.reduceList(widget.waveform, widget.waveformBarCount),
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        final isActive = player.isActive(widget.messageId);
+        if (!isActive) {
+          return _VoiceMessageBubbleContent(
+            isSent: widget.isSent,
+            background: background,
+            foreground: foreground,
+            progress: progress,
+            waveform: _normalizedWaveform,
+            isPlaying: false,
+            progressValue: 0,
+            remaining: widget.duration,
+            onTogglePressed: _onTogglePressed,
+          );
+        }
+
+        return ValueListenableBuilder<Duration>(
+          valueListenable: player.positionNotifier,
+          builder: (context, _, __) {
+            final isPlaying = player.isPlaying;
+            final progressValue = player.progressFor(widget.messageId);
+            final labelDuration = player.duration > Duration.zero
+                ? player.duration
+                : widget.duration;
+            final remainingMs = isPlaying
+                ? (labelDuration.inMilliseconds -
+                        player.position.inMilliseconds)
+                    .clamp(0, labelDuration.inMilliseconds)
+                : widget.duration.inMilliseconds;
+
+            return _VoiceMessageBubbleContent(
+              isSent: widget.isSent,
+              background: background,
+              foreground: foreground,
+              progress: progress,
+              waveform: _normalizedWaveform,
+              isPlaying: isPlaying,
+              progressValue: progressValue,
+              remaining: Duration(milliseconds: remainingMs),
+              onTogglePressed: _onTogglePressed,
+            );
+          },
+        );
+      },
     );
+  }
+}
+
+@immutable
+class _VoiceMessageBubbleContent extends StatelessWidget {
+  const _VoiceMessageBubbleContent({
+    required this.isSent,
+    required this.background,
+    required this.foreground,
+    required this.progress,
+    required this.waveform,
+    required this.isPlaying,
+    required this.progressValue,
+    required this.remaining,
+    required this.onTogglePressed,
+  });
+
+  final bool isSent;
+  final Color background;
+  final Color foreground;
+  final Color progress;
+  final List<double> waveform;
+  final bool isPlaying;
+  final double progressValue;
+  final Duration remaining;
+  final Future<void> Function() onTogglePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return Align(
-      alignment: widget.isSent ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: isSent ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 280),
         child: Material(
@@ -118,8 +235,9 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                  onPressed: _onTogglePressed,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 36, height: 36),
+                  onPressed: () => onTogglePressed(),
                   icon: Icon(
                     isPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded,
                     color: foreground,
@@ -143,7 +261,8 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                 const SizedBox(width: 8),
                 Text(
                   formatVoiceDuration(remaining),
-                  style: theme.textTheme.labelMedium?.copyWith(color: foreground),
+                  style:
+                      theme.textTheme.labelMedium?.copyWith(color: foreground),
                 ),
               ],
             ),
