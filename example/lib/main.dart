@@ -31,7 +31,13 @@ class VoiceMessageDemoPage extends StatefulWidget {
 }
 
 class _VoiceMessageDemoPageState extends State<VoiceMessageDemoPage> {
-  final VoiceRecordController _recordController = VoiceRecordController();
+  late final VoiceRecording _recording = VoiceRecording(
+    storage: const PlatformVoiceMessageStorage(),
+    onRecordingSaved: (result) async {
+      // Persist the recording in your chat repository / database.
+      debugPrint('Saved voice message: ${result.filePath}');
+    },
+  );
   final List<_VoiceMessage> _messages = [
     _VoiceMessage(
       id: 'seed-1',
@@ -51,7 +57,7 @@ class _VoiceMessageDemoPageState extends State<VoiceMessageDemoPage> {
 
   @override
   void dispose() {
-    _recordController.dispose();
+    _recording.dispose();
     super.dispose();
   }
 
@@ -62,8 +68,6 @@ class _VoiceMessageDemoPageState extends State<VoiceMessageDemoPage> {
           id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
           audioPath: path,
           duration: duration,
-          // Demo placeholder: replace with real amplitude extraction in production
-          // (e.g. audio_waveforms, ffmpeg, or platform-specific APIs).
           waveform: _mockWaveform(seed: path.hashCode),
           isSent: true,
         ),
@@ -119,7 +123,7 @@ class _VoiceMessageDemoPageState extends State<VoiceMessageDemoPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     VoiceMessageRecorder(
-                      controller: _recordController,
+                      recording: _recording,
                       onRecordingComplete: _addRecordedMessage,
                       onError: (error, _) {
                         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'duration_format.dart';
-import 'voice_message_player.dart';
+import '../logic/playback/voice_message_player.dart';
+import '../logic/playback/voice_playback_event.dart';
+import '../utils/duration_format.dart';
+import '../utils/waveform_utils.dart';
 import 'voice_message_scope.dart';
-import 'voice_playback_event.dart';
 import 'waveform_painter.dart';
-import 'waveform_utils.dart';
 
 /// Chat-style bubble for playing a recorded voice message with a waveform.
 @immutable
@@ -86,7 +86,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
   VoiceMessagePlayer _resolvePlayer() {
     return widget.player ??
-        VoiceMessageScope.maybeOf(context) ??
+        VoiceMessageScope.maybePlayerOf(context) ??
         VoiceMessagePlayer.instance;
   }
 

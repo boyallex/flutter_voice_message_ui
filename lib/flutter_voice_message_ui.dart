@@ -1,10 +1,10 @@
-export 'src/duration_format.dart';
-export 'src/recording/voice_recorder.dart';
-export 'src/recording/voice_record_controller.dart';
-export 'src/voice_message_bubble.dart';
-export 'src/voice_message_player.dart';
-export 'src/voice_message_recorder.dart';
-export 'src/voice_message_scope.dart';
-export 'src/voice_playback_event.dart';
-export 'src/waveform_painter.dart';
-export 'src/waveform_utils.dart';
+library;
+
+export 'voice_playback.dart';
+export 'voice_recording.dart';
+export 'src/ui/voice_message_bubble.dart';
+export 'src/ui/voice_message_recorder.dart';
+export 'src/ui/voice_message_scope.dart';
+export 'src/ui/waveform_painter.dart';
+export 'src/utils/duration_format.dart';
+export 'src/utils/waveform_utils.dart';

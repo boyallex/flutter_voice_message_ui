@@ -1,33 +1,37 @@
 import 'package:flutter/material.dart';
 
-import 'voice_message_player.dart';
+import '../logic/playback/voice_playback.dart';
+import '../logic/playback/voice_message_player.dart';
 
-/// Provides a shared [VoiceMessagePlayer] to descendant widgets.
-///
-/// Wrap your chat screen so every [VoiceMessageBubble] shares one player
-/// with reference-counted stream subscriptions.
+/// Provides shared [VoicePlayback] logic to descendant widgets.
 @immutable
 class VoiceMessageScope extends StatefulWidget {
   const VoiceMessageScope({
     super.key,
     required this.child,
+    this.playback,
     this.player,
   });
 
   final Widget child;
+  final VoicePlayback? playback;
   final VoiceMessagePlayer? player;
 
-  static VoiceMessagePlayer of(BuildContext context) {
+  static VoicePlayback of(BuildContext context) {
     final scope =
         context.dependOnInheritedWidgetOfExactType<_InheritedVoiceMessageScope>();
     assert(scope != null, 'VoiceMessageScope not found in context');
-    return scope!.player;
+    return scope!.playback;
   }
 
-  static VoiceMessagePlayer? maybeOf(BuildContext context) {
+  static VoicePlayback? maybeOf(BuildContext context) {
     return context
         .dependOnInheritedWidgetOfExactType<_InheritedVoiceMessageScope>()
-        ?.player;
+        ?.playback;
+  }
+
+  static VoiceMessagePlayer? maybePlayerOf(BuildContext context) {
+    return maybeOf(context)?.player;
   }
 
   @override
@@ -35,14 +39,17 @@ class VoiceMessageScope extends StatefulWidget {
 }
 
 class _VoiceMessageScopeState extends State<VoiceMessageScope> {
-  late final VoiceMessagePlayer _player =
-      widget.player ?? VoiceMessagePlayer();
-  late final bool _ownsPlayer = widget.player == null;
+  late final VoicePlayback _playback = widget.playback ??
+      (widget.player != null
+          ? VoicePlayback(player: widget.player)
+          : VoicePlayback());
+  late final bool _ownsPlayback =
+      widget.playback == null && widget.player == null;
 
   @override
   void dispose() {
-    if (_ownsPlayer) {
-      _player.dispose();
+    if (_ownsPlayback) {
+      _playback.dispose();
     }
     super.dispose();
   }
@@ -50,7 +57,7 @@ class _VoiceMessageScopeState extends State<VoiceMessageScope> {
   @override
   Widget build(BuildContext context) {
     return _InheritedVoiceMessageScope(
-      player: _player,
+      playback: _playback,
       child: widget.child,
     );
   }
@@ -58,14 +65,14 @@ class _VoiceMessageScopeState extends State<VoiceMessageScope> {
 
 class _InheritedVoiceMessageScope extends InheritedWidget {
   const _InheritedVoiceMessageScope({
-    required this.player,
+    required this.playback,
     required super.child,
   });
 
-  final VoiceMessagePlayer player;
+  final VoicePlayback playback;
 
   @override
   bool updateShouldNotify(_InheritedVoiceMessageScope oldWidget) {
-    return player != oldWidget.player;
+    return playback != oldWidget.playback;
   }
 }

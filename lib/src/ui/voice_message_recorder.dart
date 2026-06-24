@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
-import 'duration_format.dart';
-import 'recording/voice_record_controller.dart';
+import '../logic/recording/voice_record_controller.dart';
+import '../logic/recording/voice_recording.dart';
+import '../utils/duration_format.dart';
 
 /// Compact recorder UI with record, pause, resume, send, and cancel actions.
 @immutable
-class VoiceMessageRecorder extends StatefulWidget {
+class VoiceMessageRecorder extends StatelessWidget {
   const VoiceMessageRecorder({
     super.key,
-    required this.controller,
+    required this.recording,
     this.onRecordingComplete,
     this.onCancel,
     this.onError,
@@ -20,7 +21,7 @@ class VoiceMessageRecorder extends StatefulWidget {
     this.cancelTooltip = 'Cancel',
   });
 
-  final VoiceRecordController controller;
+  final VoiceRecording recording;
   final void Function(String filePath, Duration duration)? onRecordingComplete;
   final VoidCallback? onCancel;
   final void Function(Object error, StackTrace stackTrace)? onError;
@@ -31,46 +32,58 @@ class VoiceMessageRecorder extends StatefulWidget {
   final String sendTooltip;
   final String cancelTooltip;
 
-  @override
-  State<VoiceMessageRecorder> createState() => _VoiceMessageRecorderState();
-}
+  VoiceRecordController get _controller => recording.controller;
 
-class _VoiceMessageRecorderState extends State<VoiceMessageRecorder> {
   Future<void> _startRecording() async {
     try {
-      await widget.controller.start();
+      await _controller.start();
     } on Object catch (error, stackTrace) {
-      widget.onError?.call(error, stackTrace);
+      onError?.call(error, stackTrace);
     }
   }
 
   Future<void> _sendRecording() async {
     try {
-      final duration = widget.controller.elapsed;
-      final path = await widget.controller.stop();
-      if (path != null) {
-        widget.onRecordingComplete?.call(path, duration);
+      final result = await recording.send();
+      if (result != null) {
+        onRecordingComplete?.call(result.filePath, result.duration);
       }
     } on Object catch (error, stackTrace) {
-      widget.onError?.call(error, stackTrace);
+      onError?.call(error, stackTrace);
     }
   }
 
   Future<void> _cancelRecording() async {
     try {
-      await widget.controller.cancel();
-      widget.onCancel?.call();
+      await recording.cancel();
+      onCancel?.call();
     } on Object catch (error, stackTrace) {
-      widget.onError?.call(error, stackTrace);
+      onError?.call(error, stackTrace);
+    }
+  }
+
+  Future<void> _pauseRecording() async {
+    try {
+      await _controller.pause();
+    } on Object catch (error, stackTrace) {
+      onError?.call(error, stackTrace);
+    }
+  }
+
+  Future<void> _resumeRecording() async {
+    try {
+      await _controller.resume();
+    } on Object catch (error, stackTrace) {
+      onError?.call(error, stackTrace);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: _controller,
       builder: (context, _) {
-        final controller = widget.controller;
+        final controller = _controller;
         final theme = Theme.of(context);
         final isRecording = controller.state == VoiceRecordState.recording;
         final isPaused = controller.state == VoiceRecordState.paused;
@@ -95,36 +108,36 @@ class _VoiceMessageRecorderState extends State<VoiceMessageRecorder> {
                   child: Text(
                     isActive
                         ? formatVoiceDuration(controller.elapsed)
-                        : widget.hintText,
+                        : hintText,
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),
                 if (!isActive)
                   IconButton(
-                    tooltip: widget.recordTooltip,
+                    tooltip: recordTooltip,
                     onPressed: _startRecording,
                     icon: const Icon(Icons.fiber_manual_record_rounded),
                   )
                 else ...[
                   if (isRecording)
                     IconButton(
-                      tooltip: widget.pauseTooltip,
-                      onPressed: controller.pause,
+                      tooltip: pauseTooltip,
+                      onPressed: _pauseRecording,
                       icon: const Icon(Icons.pause_rounded),
                     )
                   else
                     IconButton(
-                      tooltip: widget.resumeTooltip,
-                      onPressed: controller.resume,
+                      tooltip: resumeTooltip,
+                      onPressed: _resumeRecording,
                       icon: const Icon(Icons.play_arrow_rounded),
                     ),
                   IconButton(
-                    tooltip: widget.sendTooltip,
+                    tooltip: sendTooltip,
                     onPressed: _sendRecording,
                     icon: const Icon(Icons.send_rounded),
                   ),
                   IconButton(
-                    tooltip: widget.cancelTooltip,
+                    tooltip: cancelTooltip,
                     onPressed: _cancelRecording,
                     icon: const Icon(Icons.close_rounded),
                   ),

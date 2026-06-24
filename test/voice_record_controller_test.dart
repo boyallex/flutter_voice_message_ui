@@ -1,8 +1,25 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_voice_message_ui/flutter_voice_message_ui.dart';
+import 'package:flutter_voice_message_ui/voice_recording.dart';
 import 'package:record/record.dart';
 
-class _FakeVoiceRecorder implements VoiceRecorder {
+class _InMemoryStorage implements VoiceMessageStorage {
+  _InMemoryStorage(this.directoryPath);
+
+  final String directoryPath;
+  final deletedPaths = <String>[];
+
+  @override
+  Future<String> createRecordingPath() async {
+    return '$directoryPath/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+  }
+
+  @override
+  Future<void> deleteFile(String path) async {
+    deletedPaths.add(path);
+  }
+}
+
+class _MockVoiceRecorder implements VoiceRecorder {
   bool permissionGranted = true;
   bool disposed = false;
   int startCount = 0;
@@ -48,14 +65,16 @@ class _FakeVoiceRecorder implements VoiceRecorder {
 
 void main() {
   group('VoiceRecordController', () {
-    late _FakeVoiceRecorder recorder;
+    late _MockVoiceRecorder recorder;
+    late _InMemoryStorage storage;
     late VoiceRecordController controller;
 
     setUp(() {
-      recorder = _FakeVoiceRecorder();
+      recorder = _MockVoiceRecorder();
+      storage = _InMemoryStorage('/tmp');
       controller = VoiceRecordController(
+        storage: storage,
         recorder: recorder,
-        tempDirectoryPath: () async => '/tmp',
       );
     });
 
@@ -94,6 +113,7 @@ void main() {
       expect(controller.state, VoiceRecordState.idle);
       expect(controller.filePath, isNull);
       expect(controller.elapsed, Duration.zero);
+      expect(storage.deletedPaths, isNotEmpty);
     });
 
     test('dispose cancels active recording', () async {
@@ -106,10 +126,10 @@ void main() {
     });
 
     test('parallel start calls are ignored while starting', () async {
-      final slowRecorder = _SlowFakeVoiceRecorder();
+      final slowRecorder = _SlowMockVoiceRecorder();
       final slowController = VoiceRecordController(
+        storage: storage,
         recorder: slowRecorder,
-        tempDirectoryPath: () async => '/tmp',
       );
 
       final first = slowController.start();
@@ -123,9 +143,32 @@ void main() {
       await Future<void>.delayed(Duration.zero);
     });
   });
+
+  group('VoiceRecording', () {
+    test('send invokes onRecordingSaved', () async {
+      final storage = _InMemoryStorage('/tmp');
+      final recorder = _MockVoiceRecorder();
+      VoiceRecordingResult? saved;
+
+      final recording = VoiceRecording(
+        storage: storage,
+        recorder: recorder,
+        onRecordingSaved: (result) async {
+          saved = result;
+        },
+      );
+
+      await recording.controller.start();
+      final result = await recording.send();
+
+      expect(result, isNotNull);
+      expect(saved, equals(result));
+      recording.dispose();
+    });
+  });
 }
 
-class _SlowFakeVoiceRecorder extends _FakeVoiceRecorder {
+class _SlowMockVoiceRecorder extends _MockVoiceRecorder {
   @override
   Future<bool> hasPermission() async {
     await Future<void>.delayed(const Duration(milliseconds: 20));

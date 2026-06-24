@@ -1,10 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
-import '../file_deleter.dart';
+import '../storage/voice_message_storage.dart';
 import 'voice_recorder.dart';
 
 /// Recording lifecycle for voice messages.
@@ -17,13 +16,13 @@ enum VoiceRecordState {
 /// Controller that wraps a [VoiceRecorder] for voice capture.
 class VoiceRecordController extends ChangeNotifier {
   VoiceRecordController({
+    required VoiceMessageStorage storage,
     VoiceRecorder? recorder,
-    Future<String> Function()? tempDirectoryPath,
-  })  : _recorder = recorder ?? RecordPackageRecorder(),
-        _tempDirectoryPath = tempDirectoryPath ?? _defaultTempDirectoryPath;
+  })  : _storage = storage,
+        _recorder = recorder ?? RecordPackageRecorder();
 
+  final VoiceMessageStorage _storage;
   final VoiceRecorder _recorder;
-  final Future<String> Function() _tempDirectoryPath;
   VoiceRecordState _state = VoiceRecordState.idle;
   Duration _elapsed = Duration.zero;
   String? _filePath;
@@ -55,9 +54,7 @@ class VoiceRecordController extends ChangeNotifier {
         return;
       }
 
-      final directoryPath = await _tempDirectoryPath();
-      _filePath =
-          '$directoryPath/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      _filePath = await _storage.createRecordingPath();
 
       await _recorder.start(
         config: const RecordConfig(
@@ -119,7 +116,7 @@ class VoiceRecordController extends ChangeNotifier {
   Future<void> cancel() async {
     final path = await stop();
     if (path != null) {
-      await deleteFileIfExists(path);
+      await _storage.deleteFile(path);
     }
     _filePath = null;
     _elapsed = Duration.zero;
@@ -157,7 +154,7 @@ class VoiceRecordController extends ChangeNotifier {
       final path = await _recorder.stop();
       _state = VoiceRecordState.idle;
       if (path != null) {
-        await deleteFileIfExists(path);
+        await _storage.deleteFile(path);
       }
     } on Object {
       _state = VoiceRecordState.idle;
@@ -165,10 +162,5 @@ class VoiceRecordController extends ChangeNotifier {
     _filePath = null;
     _elapsed = Duration.zero;
     _pausedElapsed = Duration.zero;
-  }
-
-  static Future<String> _defaultTempDirectoryPath() async {
-    final directory = await getTemporaryDirectory();
-    return directory.path;
   }
 }

@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_voice_message_ui/flutter_voice_message_ui.dart';
+import 'package:flutter_voice_message_ui/voice_recording.dart';
 import 'package:record/record.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('WaveformUtils', () {
     test('reduceList downsamples using peak values', () {
       final reduced = WaveformUtils.reduceList(
@@ -34,9 +37,17 @@ void main() {
   });
 
   group('VoiceMessagePlayer', () {
-    test('attach and detach use reference counting', () {
-      final player = VoiceMessagePlayer();
+    late VoiceMessagePlayer player;
 
+    setUp(() {
+      player = VoiceMessagePlayer();
+    });
+
+    tearDown(() {
+      player.dispose();
+    });
+
+    test('attach and detach use reference counting', () {
       player.attach();
       player.attach();
       expect(player.isAttached, isTrue);
@@ -49,13 +60,10 @@ void main() {
     });
 
     test('progressFor returns zero for inactive messages', () {
-      final player = VoiceMessagePlayer();
-
       expect(player.progressFor('msg-1'), 0);
     });
 
     test('registers playback event listeners', () {
-      final player = VoiceMessagePlayer();
       final events = <VoicePlaybackEvent>[];
 
       void listener(VoicePlaybackEvent event) => events.add(event);
@@ -68,11 +76,17 @@ void main() {
   });
 
   group('VoiceRecordController', () {
+    late _InMemoryStorage storage;
+
+    setUp(() {
+      storage = _InMemoryStorage('/tmp');
+    });
+
     test('start transitions to recording when permission is granted', () async {
       final recorder = _FakeVoiceRecorder();
       final controller = VoiceRecordController(
+        storage: storage,
         recorder: recorder,
-        tempDirectoryPath: () async => '/tmp',
       );
 
       await controller.start();
@@ -80,36 +94,39 @@ void main() {
       expect(controller.state, VoiceRecordState.recording);
       expect(controller.filePath, isNotNull);
       expect(recorder.isRecording, isTrue);
+      controller.dispose();
     });
 
     test('start throws when permission is denied', () async {
       final recorder = _FakeVoiceRecorder(permissionGranted: false);
       final controller = VoiceRecordController(
+        storage: storage,
         recorder: recorder,
-        tempDirectoryPath: () async => '/tmp',
       );
 
       await expectLater(controller.start(), throwsA(isA<StateError>()));
       expect(controller.state, VoiceRecordState.idle);
+      controller.dispose();
     });
 
     test('parallel start calls only start once', () async {
       final recorder = _FakeVoiceRecorder();
       final controller = VoiceRecordController(
+        storage: storage,
         recorder: recorder,
-        tempDirectoryPath: () async => '/tmp',
       );
 
       await Future.wait([controller.start(), controller.start()]);
 
       expect(recorder.startCount, 1);
+      controller.dispose();
     });
 
     test('pause and resume update state', () async {
       final recorder = _FakeVoiceRecorder();
       final controller = VoiceRecordController(
+        storage: storage,
         recorder: recorder,
-        tempDirectoryPath: () async => '/tmp',
       );
 
       await controller.start();
@@ -118,13 +135,14 @@ void main() {
 
       await controller.resume();
       expect(controller.state, VoiceRecordState.recording);
+      controller.dispose();
     });
 
     test('dispose stops active recording', () async {
       final recorder = _FakeVoiceRecorder();
       final controller = VoiceRecordController(
+        storage: storage,
         recorder: recorder,
-        tempDirectoryPath: () async => '/tmp',
       );
 
       await controller.start();
@@ -134,6 +152,20 @@ void main() {
       expect(recorder.disposeCount, 1);
     });
   });
+}
+
+class _InMemoryStorage implements VoiceMessageStorage {
+  _InMemoryStorage(this.directoryPath);
+
+  final String directoryPath;
+
+  @override
+  Future<String> createRecordingPath() async {
+    return '$directoryPath/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+  }
+
+  @override
+  Future<void> deleteFile(String path) async {}
 }
 
 class _FakeVoiceRecorder implements VoiceRecorder {

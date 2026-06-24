@@ -8,16 +8,13 @@ import 'voice_playback_event.dart';
 typedef VoicePlaybackEventCallback = void Function(VoicePlaybackEvent event);
 
 /// Audio controller that keeps only one voice message playing at a time.
-///
-/// Prefer providing a single instance via [VoiceMessageScope] rather than
-/// using [instance] directly.
 class VoiceMessagePlayer extends ChangeNotifier {
   VoiceMessagePlayer({AudioPlayer? player}) : _player = player ?? AudioPlayer();
 
   static VoiceMessagePlayer? _instance;
 
-  /// Shared player for simple integrations. For chat screens, use
-  /// [VoiceMessageScope] with an explicitly owned [VoiceMessagePlayer].
+  /// Shared player for simple integrations. Prefer [VoicePlayback] via
+  /// [VoiceMessageScope] in apps.
   static VoiceMessagePlayer get instance => _instance ??= VoiceMessagePlayer();
 
   final AudioPlayer _player;
